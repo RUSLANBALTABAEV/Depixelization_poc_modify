@@ -167,3 +167,11 @@ docs/_templates/
 *.orig
 .pytest_cache/
 .mypy_cache/
+
+# Media
+*.png
+*.jpg
+*.jpeg
+images/*.png
+images/*.jpg
+images/*.jpeg
