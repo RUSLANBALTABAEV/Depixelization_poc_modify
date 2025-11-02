@@ -2,27 +2,20 @@ from __future__ import annotations
 
 import argparse
 import logging
-logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 from PIL import Image, ImageDraw
 
-from depixlib.helpers import (
-    check_file,
-    check_color
-)
+from depixlib.helpers import check_file, check_color
 from depixlib.functions import (
-    dropEmptyRectangleMatches,
-    findGeometricMatchesForSingleResults,
-    findRectangleMatches,
     findRectangleSizeOccurences,
     findSameColorSubRectangles,
-    removeMootColorRectangles,
-    splitSingleMatchAndMultipleMatches,
-    writeAverageMatchToImage,
-    writeFirstMatchToImage
+    removeMootColorRectangles
 )
 from depixlib.LoadedImage import LoadedImage
 from depixlib.Rectangle import Rectangle
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     """
 
     parser = argparse.ArgumentParser(
-        description="This command recovers passwords from pixelized screenshots.",
+        description="Visualize detected pixelated blocks.",
         epilog=usage
     )
     parser.add_argument(
@@ -43,7 +36,6 @@ def parse_args() -> argparse.Namespace:
         "--pixelimage",
         help="path to image with pixelated rectangle",
         required=True,
-        default=argparse.SUPPRESS,
         type=check_file,
         metavar="PATH"
     )
@@ -52,17 +44,8 @@ def parse_args() -> argparse.Namespace:
         "--searchimage",
         help="path to image with patterns to search",
         required=True,
-        default=argparse.SUPPRESS,
         type=check_file,
         metavar="PATH",
-    )
-    parser.add_argument(
-        "-a",
-        "--averagetype",
-        help="type of RGB average to use",
-        default="gammacorrected",
-        choices=["gammacorrected", "linear"],
-        metavar="TYPE",
     )
     parser.add_argument(
         "-b",
@@ -73,10 +56,18 @@ def parse_args() -> argparse.Namespace:
         metavar="RGB"
     )
     parser.add_argument(
+        "-e",
+        "--enhance",
+        help="enhancement factor (default: 3)",
+        default=3,
+        type=int,
+        metavar="N"
+    )
+    parser.add_argument(
         "-o",
         "--outputimage",
-        help="path to output image",
-        default="output.png",
+        help="path to save output image (optional)",
+        default=None,
         metavar="PATH",
     )
     return parser.parse_args()
@@ -87,70 +78,60 @@ def main() -> None:
 
     pixelatedImagePath = args.pixelimage
     searchImagePath = args.searchimage
-    editorBackgroundColor: tuple[int, int, int] | None = args.backgroundcolor
-    averageType = args.averagetype
+    editorBackgroundColor = args.backgroundcolor
 
-    logging.info("Loading pixelated image from %s" % pixelatedImagePath)
+    logger.info("Loading pixelated image from %s", pixelatedImagePath)
     pixelatedImage = LoadedImage(pixelatedImagePath)
-    unpixelatedOutputImage = pixelatedImage.getCopyOfLoadedPILImage()
 
-    logging.info("Loading search image from %s" % searchImagePath)
+    logger.info("Loading search image from %s", searchImagePath)
     searchImage = LoadedImage(searchImagePath)
 
-    logging.info("Finding color rectangles from pixelated space")
-    # fill coordinates here if not cut out
-    pixelatedRectange = Rectangle(
+    logger.info("Finding color rectangles from pixelated space")
+    pixelatedRectangle = Rectangle(
         (0, 0), (pixelatedImage.width - 1, pixelatedImage.height - 1)
     )
 
-    pixelatedSubRectanges = findSameColorSubRectangles(
-        pixelatedImage, pixelatedRectange
+    pixelatedSubRectangles = findSameColorSubRectangles(
+        pixelatedImage, pixelatedRectangle
     )
-    logging.info("Found %s same color rectangles" % len(pixelatedSubRectanges))
+    logger.info("Found %d same color rectangles", len(pixelatedSubRectangles))
 
-    pixelatedSubRectanges = removeMootColorRectangles(
-        pixelatedSubRectanges, editorBackgroundColor
+    pixelatedSubRectangles = removeMootColorRectangles(
+        pixelatedSubRectangles, editorBackgroundColor
     )
-    logging.info("%s rectangles left after moot filter" % len(pixelatedSubRectanges))
+    logger.info("%d rectangles left after moot filter", len(pixelatedSubRectangles))
 
-    rectangeSizeOccurences = findRectangleSizeOccurences(pixelatedSubRectanges)
-    logging.info("Found %s different rectangle sizes" % len(rectangeSizeOccurences))
-    if len(rectangeSizeOccurences) > max(
-        10, pixelatedRectange.width * pixelatedRectange.height * 0.01
+    rectangleSizeOccurrences = findRectangleSizeOccurences(pixelatedSubRectangles)
+    logger.info("Found %d different rectangle sizes", len(rectangleSizeOccurrences))
+    
+    if len(rectangleSizeOccurrences) > max(
+        10, pixelatedRectangle.width * pixelatedRectangle.height * 0.01
     ):
-        logging.warning(
+        logger.warning(
             "Too many variants on block size. Re-cropping the image might help."
         )
 
-    logging.info("Finding matches in search image")
-    rectangleMatches = findRectangleMatches(
-        rectangeSizeOccurences, pixelatedSubRectanges, searchImage, averageType
-    )
-
-    logging.info("Removing blocks with no matches")
-    pixelatedSubRectanges = dropEmptyRectangleMatches(
-        rectangleMatches, pixelatedSubRectanges
-    )
-
-    # Enhance like in the movies
-    enhance = 3
+    # Enhance image
+    enhance = args.enhance
+    logger.info("Creating visualization with %dx enhancement", enhance)
     
     image = Image.open(pixelatedImagePath)
     enhancedImage = image.resize((image.width*enhance, image.height*enhance))
     draw = ImageDraw.Draw(enhancedImage)
 
-    # Show crappy box detector output
-    for box in pixelatedSubRectanges:
-
-        draw.line([
+    # Draw boxes
+    for box in pixelatedSubRectangles:
+        draw.rectangle([
             (box.x*enhance, box.y*enhance),
-            (((box.x+box.width)*enhance)-enhance, box.y*enhance ),
-            (((box.x+box.width)*enhance)-enhance, ((box.y+box.height)*enhance)-enhance),
-            (box.x*enhance, ((box.y+box.height)*enhance) - enhance),
-            (box.x*enhance, box.y*enhance)
-            ], width=1, fill="red")
+            ((box.x+box.width)*enhance - enhance, (box.y+box.height)*enhance - enhance)
+        ], outline="red", width=1)
 
-    enhancedImage.show()
+    # Save or show
+    if args.outputimage:
+        enhancedImage.save(args.outputimage)
+        logger.info("Saved visualization to %s", args.outputimage)
+    else:
+        enhancedImage.show()
 
 
 if __name__ == "__main__":
