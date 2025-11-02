@@ -1,47 +1,71 @@
 # Depix
 
-Depix is a PoC for a technique to recover plaintext from pixelized screenshots.
+Depix is a proof-of-concept tool for recovering plaintext from pixelized screenshots.
 
-This implementation works on pixelized images that were created with a linear box filter.
-In [this article](https://www.spipm.nl/2030.html) I cover background information on pixelization and similar research.
+This implementation works on pixelized images created with linear box filters. Read more about the technique in [this article](https://www.spipm.nl/2030.html).
+
+## Features
+
+- 🔍 Recover text from pixelated screenshots
+- ⚡ NumPy-accelerated template matching
+- 🎨 Support for multiple averaging methods (gamma-corrected, linear)
+- 🛠️ Additional tools for visualization and testing
+- 📊 Detailed progress logging and statistics
 
 ## Example
 
-![image](docs/img/Recovering_prototype_latest.png)
-
-## Updates
-
-* 24 dec '24: Made repo private, changed the name and made it public again. It just had a ridiculous amount of stars because of the media hype, which didn't feel right. I made this as a quick PoC for a company back in the day, because someone pixelated part of a password for an account with Domain Admin rights. The hype got running by the catchy image and eventually this repo had 26152 stars. If I ever get this much stars again, I want it to be for a project that I'm that hyped about as well.
-![image](images/stars.png)
-* 27 nov '23: Refactored and removed all this pip stuff. I like scripts I can just run. If a package can't be found, just install it. Also added `tool_show_boxes.py` to show how bad the box detector is (you have to really cut out the pixels exactly). Made a TODO to create a version that just cuts out boxes of static size.
+![Example](docs/img/Recovering_prototype_latest.png)
 
 ## Installation
 
-* Install the dependencies
-* Run Depix:
+### Requirements
 
-```sh
-python3 depix.py \
-    -p /path/to/your/input/image.png \
-    -s images/searchimages/debruinseq_notepad_Windows10_closeAndSpaced.png \
-    -o /path/to/your/output.png
+- Python 3.7+
+- PIL/Pillow
+- NumPy
+- OpenCV (cv2)
+
+### Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/depix.git
+cd depix
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-## Example usage
+## Usage
 
-* Depixelize example image created with Notepad and pixelized with Greenshot. Greenshot averages by averaging the gamma-encoded 0-255 values, which is Depix's default mode.
+### Basic Depixelization
 
-```sh
+```bash
+python3 depix.py \
+    -p /path/to/pixelated/image.png \
+    -s /path/to/search/image.png \
+    -o /path/to/output.png
+```
+
+### Options
+
+- `-p, --pixelimage PATH` - Path to pixelated image (required)
+- `-s, --searchimage PATH` - Path to search pattern image (required)
+- `-o, --outputimage PATH` - Path to output image (default: output.png)
+- `-a, --averagetype TYPE` - Averaging method: `gammacorrected` or `linear` (default: gammacorrected)
+- `-b, --backgroundcolor R,G,B` - Background color to ignore (e.g., `40,41,35`)
+
+### Example: Notepad Screenshot (Windows)
+
+```bash
 python3 depix.py \
     -p images/testimages/testimage3_pixels.png \
     -s images/searchimages/debruinseq_notepad_Windows10_closeAndSpaced.png
 ```
 
-Result: ![image](docs/img/example_output_multiword.png)
+### Example: Sublime Text (Linear Averaging)
 
-* Depixelize example image created with Sublime and pixelized with Gimp, where averaging is done in linear sRGB. The backgroundcolor option filters out the background color of the editor.
-
-```sh
+```bash
 python3 depix.py \
     -p images/testimages/sublime_screenshot_pixels_gimp.png \
     -s images/searchimages/debruin_sublime_Linux_small.png \
@@ -49,67 +73,141 @@ python3 depix.py \
     --averagetype linear
 ```
 
-Result: ![image](docs/img/output_depixelizedExample_linear.png)
+## Additional Tools
 
-* (Optional) You can view if the box detector thingie finds your pixels with `tool_show_boxes.py`. Consider a smaller batch of pixels if this looks all mangled. Example of good looking boxes:
+### Visualize Detected Blocks
 
-```sh
-python3 tool_show_boxes.py \ 
-    -p images/testimages/testimage3_pixels.png \
-    -s images/searchimages/debruinseq_notepad_Windows10_closeAndSpaced.png
+Use this tool to verify that pixelated blocks are detected correctly:
+
+```bash
+python3 tool_show_boxes.py \
+    -p /path/to/pixelated/image.png \
+    -s /path/to/search/image.png
 ```
 
-* (Optional) You can create pixelized image by using `tool_gen_pixelated.py`.
+Options:
+- `-e, --enhance N` - Enhancement factor for visualization (default: 3)
+- `-o, --outputimage PATH` - Save visualization to file instead of displaying
 
-```sh
-python3 tool_gen_pixelated.py -i /path/to/image.png -o pixed_output.png
+### Generate Pixelated Test Images
+
+```bash
+python3 tool_gen_pixelated.py \
+    -i /path/to/input/image.png \
+    -o /path/to/output.png \
+    --blocksize 5 \
+    --method gamma
 ```
 
-* For a detailed explanation, please try to run `$ python3 depix.py -h` and `tool_gen_pixelated.py`.
+Options:
+- `-b, --blocksize N` - Size of pixelation blocks (default: 5)
+- `-m, --method METHOD` - Averaging method: `gamma` or `linear` (default: gamma)
 
-## About
+## Creating Search Images
 
-### Making a Search Image
+To create an effective search image:
 
-* Cut out the pixelated blocks from the screenshot as a single rectangle.
-* Paste a [De Bruijn sequence](https://en.wikipedia.org/wiki/De_Bruijn_sequence) with expected characters in an editor with the same font settings as your input image (Same text size, similar font, same colors).
-* Make a screenshot of the sequence.
-* Move that screenshot into a folder like `images/searchimages/`.
-* Run Depix with the `-s` flag set to the location of this screenshot.
+1. **Cut out the pixelated region** exactly from your screenshot
+2. **Create a De Bruijn sequence** containing all expected characters
+3. **Paste into the same editor** with identical settings:
+   - Same font and size
+   - Same text colors
+   - Same background color
+4. **Take a screenshot** of the De Bruijn sequence
+5. **Use as search image** with the `-s` flag
 
-### Making a Pixelized Image
+### De Bruijn Sequence
 
-* Cut out the pixelized blocks exactly. See the `testimages` for examples.
-* It tries to detect blocks but it doesn't do an amazing job. Play with the `tool_show_boxes.py` script and different cutouts if your blocks aren't properly detected.
+A [De Bruijn sequence](https://en.wikipedia.org/wiki/De_Bruijn_sequence) is a cyclic sequence where every possible substring of length n appears exactly once. This ensures all character combinations are available for matching.
 
-### Algorithm
+## How It Works
 
-The algorithm uses the fact that the linear box filter processes every block separately. For every block it pixelizes all blocks in the search image to check for direct matches.
+### Algorithm Overview
 
-For some pixelized images Depix manages to find single-match results. It assumes these are correct. The matches of surrounding multi-match blocks are then compared to be geometrically at the same distance as in the pixelized image. Matches are also treated as correct. This process is repeated a couple of times.
+1. **Block Detection**: Identify same-color rectangular blocks in the pixelated image
+2. **Template Matching**: Search for each block in the search image using OpenCV's template matching
+3. **Single Match Resolution**: Directly copy blocks with unique matches
+4. **Multiple Match Averaging**: Average all possible matches for ambiguous blocks
+5. **Output Generation**: Reconstruct the depixelized image
 
-After correct blocks have no more geometrical matches, it will output all correct blocks directly. For multi-match blocks, it outputs the average of all matches.
+### Key Assumptions
 
-### Known limitations
+- The pixelation used a linear box filter
+- Text positioning is at pixel-level precision (not sub-pixel)
+- No additional compression was applied after pixelation
+- Font settings match between original and search images
 
-* The algorithm matches by integer block-boundaries. As a result, it has the underlying assumption that for all characters rendered (both in the de Brujin sequence and the pixelated image), the text positioning is done at pixel level. However, some modern text rasterizers position text [at sub-pixel accuracies](http://agg.sourceforge.net/antigrain.com/research/font_rasterization/).
-* You need to know the font specifications and in some cases the screen settings with which the screenshot was taken. However, if there is enough plaintext in the original image you might be able to use the original as a search image.
-* This approach doesn't work if additional image compression is performed, because it messes up the colors of a block.
+## Known Limitations
 
-### Future development
+- **Sub-pixel rendering**: Modern text rasterizers may use sub-pixel positioning, which can reduce accuracy
+- **Font matching**: Requires knowledge of the exact font, size, and rendering settings
+- **Compression artifacts**: Additional image compression can corrupt the pixelated blocks
+- **Block boundary alignment**: The algorithm requires pixel-perfect block boundaries
 
-* Implement more filter functions
+## Performance
 
-Create more averaging filters that work like some popular editors do.
+- **NumPy acceleration**: Fast template matching using OpenCV
+- **Progress tracking**: Real-time progress updates for large images
+- **Memory efficient**: Streams pixel data without loading entire arrays
 
-* Create a new tool that utilizes HMMs
+## Troubleshooting
 
-Still, anyone who is passionate about this type of depixelization is encouraged to implement their own HMM-based version and share it.
+### Too many block size variants
 
-### Other sources and tools
+If you see this warning:
+```
+WARNING - Too many variants on block size. Re-cropping the image might help.
+```
 
-After creating this program, someone pointed me to a [research document](https://www.researchgate.net/publication/305423573_On_the_Ineffectiveness_of_Mosaicing_and_Blurring_as_Tools_for_Document_Redaction) from 2016 where a group of researchers managed to create a similar tool. Their tool has better precision and works across many different fonts. While their original source code is not public, an open-source implementation exists at [DepixHMM](https://github.com/JonasSchatz/DepixHMM).
+**Solution**: Your pixelated region may not be cut precisely. Use `tool_show_boxes.py` to visualize detected blocks and re-crop more carefully.
 
-Edit 16 Feb '22: [Dan Petro](https://bishopfox.com/authors/dan-petro) created the tool UnRedacter ([write-up](https://bishopfox.com/blog/unredacter-tool-never-pixelation), [source](https://github.com/BishopFox/unredacter)) to crack a [challenge](https://labs.jumpsec.com/can-depix-deobfuscate-your-data/) that was created as a response to Depix!
+### No matches found
 
-Edit 16 Apr '25: Jeff Geerling created a [challenge](https://www.jeffgeerling.com/blog/2025/its-easier-ever-de-censor-videos) for depixelating pixelated folder content in a moving image. Three people were able to do it. [Here](https://github.com/KoKuToru/de-pixelate_gaV-O6NPWrI) is a repo from KoKuToru showing how to do this with TensorFlow! Amazing!
+**Possible causes**:
+- Font doesn't match between pixelated and search images
+- Different text rendering settings (antialiasing, hinting)
+- Different background colors
+- Wrong averaging method (try switching between `gamma` and `linear`)
+
+### Poor results
+
+**Try**:
+- Ensure the search image uses the exact same font settings
+- Include more character variations in your De Bruijn sequence
+- Try both averaging methods
+- Filter background color with `--backgroundcolor`
+
+## Related Projects
+
+- **[DepixHMM](https://github.com/JonasSchatz/DepixHMM)** - HMM-based approach with better precision
+- **[UnRedacter](https://github.com/BishopFox/unredacter)** - Advanced tool by Bishop Fox
+- **[de-pixelate](https://github.com/KoKuToru/de-pixelate_gaV-O6NPWrI)** - TensorFlow-based video depixelation
+
+## Contributing
+
+Contributions are welcome! Areas for improvement:
+
+- Additional averaging filter implementations
+- HMM-based enhancement
+- Sub-pixel positioning support
+- Better block detection algorithms
+- GUI interface
+
+## License
+
+This work is licensed under a Creative Commons Attribution 4.0 International License.
+See LICENSE file for details.
+
+## Disclaimer
+
+This tool is for educational and research purposes only. Always obtain proper authorization before attempting to recover redacted information.
+
+## Acknowledgments
+
+- Original research on depixelization techniques
+- OpenCV and NumPy communities
+- Contributors and testers
+
+---
+
+**Note**: This is a proof-of-concept. For production use, consider more sophisticated approaches like HMM-based methods.
