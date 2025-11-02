@@ -200,13 +200,16 @@ def writeFirstMatchToImage(
             
         match = matches[0]
         
-        # Use match data (already extracted and flattened)
+        # Use match data (already extracted and flattened in dy->dx order)
         idx = 0
         for dy in range(r.height):
             for dx in range(r.width):
                 if idx < len(match.data):
                     color = match.data[idx]
-                    unpixelatedOutputImage.putpixel((r.x + dx, r.y + dy), color)
+                    # Ensure color is tuple of ints
+                    if isinstance(color, tuple) and len(color) >= 3:
+                        color = tuple(int(c) for c in color[:3])
+                        unpixelatedOutputImage.putpixel((r.x + dx, r.y + dy), color)
                 idx += 1
 
 
@@ -241,11 +244,13 @@ def writeAverageMatchToImage(
                 for dx in range(r.width):
                     if idx < len(match.data):
                         pixel = match.data[idx]
-                        accumulator[dy, dx] += np.array(pixel, dtype=np.float32)
+                        if isinstance(pixel, tuple) and len(pixel) >= 3:
+                            accumulator[dy, dx] += np.array(pixel[:3], dtype=np.float32)
                     idx += 1
         
         # Divide by number of matches
-        accumulator = accumulator / len(matches)
+        if len(matches) > 0:
+            accumulator = accumulator / len(matches)
         
         # Write to output image
         for dy in range(r.height):

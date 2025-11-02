@@ -77,13 +77,14 @@ def findRectangleMatches(
             
             try:
                 # Extract block from pixelated image
+                # NOTE: numpy arrays are [row, col] = [y, x]
                 block = pixel_array[r.y:r.y + h, r.x:r.x + w]
                 
                 # Ensure block has correct dimensions
                 if block.shape[0] != h or block.shape[1] != w:
                     logger.warning(
                         "Block at (%d, %d) has incorrect dimensions: expected %dx%d, got %s",
-                        r.x, r.y, h, w, block.shape
+                        r.x, r.y, w, h, block.shape
                     )
                     continue
                 
@@ -98,20 +99,27 @@ def findRectangleMatches(
                     cv2.TM_SQDIFF_NORMED
                 )
                 
-                # Find best match(es)
+                # Find best match
                 min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
                 
-                # Extract matched region data from search image
+                # min_loc is (x, y) in the search image
                 match_x, match_y = min_loc
                 
-                # Flatten matched data to list (row by row, then column)
+                # Extract matched data CORRECTLY from searchImage.imageData
+                # imageData is [x][y] format, NOT [y][x]
                 matched_data = []
                 for dy in range(h):
                     for dx in range(w):
-                        if match_x + dx < searchImage.width and match_y + dy < searchImage.height:
-                            matched_data.append(searchImage.imageData[match_x + dx][match_y + dy])
+                        px = match_x + dx
+                        py = match_y + dy
+                        
+                        # Check bounds
+                        if px < searchImage.width and py < searchImage.height:
+                            # imageData is [x][y]!
+                            color = searchImage.imageData[px][py]
+                            matched_data.append(color)
                         else:
-                            # Pad with black if out of bounds
+                            # Out of bounds - pad with black
                             matched_data.append((0, 0, 0))
                 
                 # Create match object
